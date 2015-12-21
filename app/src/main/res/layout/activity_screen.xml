@@ -1,0 +1,43 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000"
+    tools:context="andreasbaak.libiphoscreen.Screen"
+    android:padding="5dp"
+    android:contextClickable="false"
+    android:clickable="false"
+    android:longClickable="true">
+
+    <!-- The primary full-screen view. This can be replaced with whatever view
+         is needed to present your content, e.g. VideoView, SurfaceView,
+         TextureView, etc. -->
+    <andreasbaak.libiphoscreen.SizeAwareImageView
+        android:id="@+id/camera_image_view"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:scaleType="fitCenter"
+        android:keepScreenOn="true"
+        android:contentDescription="@string/image_content_description"
+        android:background="#000000" />
+
+    <ImageView
+        android:id="@+id/camera_image_mask"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:scaleType="fitXY"
+        android:adjustViewBounds="true"
+        android:src="@drawable/mask" />
+
+    <ImageView
+        android:id="@+id/camera_please_wait"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center"
+        android:scaleType="fitCenter"
+        android:adjustViewBounds="true"
+        android:src="@drawable/please_wait" />
+
+</FrameLayout>

@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">LibiphoScreen</string>
+    <string name="image_content_description">Image that has just been taken</string>
+</resources>
