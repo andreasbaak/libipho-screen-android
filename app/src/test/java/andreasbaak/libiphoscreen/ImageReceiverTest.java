@@ -91,17 +91,34 @@ public class ImageReceiverTest extends TestCase {
 
         @Override
         public void onImageTaken() {
+            System.out.println("onImageTaken.");
             imageTakenLatch.countDown();
+            receiver.cancel(true);
         }
 
         @Override
         public void onImageReceived(byte[] imageBuffer) {
-            System.out.println("Received a buffer of size " + Integer.toString(imageBuffer.length));
+            System.out.println("onImageReceived: received a buffer of size " + Integer.toString(imageBuffer.length));
             imageReceivedLatch.countDown();
+            receiver.cancel(true);
         }
     };
 
-    ImageReceiver receiver = new ImageReceiver("127.0.0.1", MockServer.SERVER_PORT, received);
+    NetworkConnectionStatusListener networkConnectionStatusListener = new NetworkConnectionStatusListener() {
+        @Override
+        public void onConnected() {
+            System.out.println("OnConnected.");
+        }
+
+        @Override
+        public void onDisconnected() {
+            System.out.println("OnDisconnected.");
+        }
+    };
+
+    ImageReceiver receiver = new ImageReceiver("127.0.0.1", MockServer.SERVER_PORT,
+            received,
+            networkConnectionStatusListener);
 
     @Before
     public void startServer() {
@@ -132,8 +149,11 @@ public class ImageReceiverTest extends TestCase {
         }).start();
         receiver.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
         Robolectric.flushBackgroundThreadScheduler();
+        System.out.println("Waiting for imageTakenLatch...");
+//        Assert.assertTrue(imageTakenLatch.await(10, TimeUnit.SECONDS));
         Assert.assertTrue(imageTakenLatch.await(10, TimeUnit.SECONDS));
-        receiver.cancel(true);
+//        imageTakenLatch.await();
+
     }
 
     @Test
@@ -153,6 +173,6 @@ public class ImageReceiverTest extends TestCase {
         receiver.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
         Robolectric.flushBackgroundThreadScheduler();
         Assert.assertTrue(imageReceivedLatch.await(10, TimeUnit.SECONDS));
-        receiver.cancel(true);
+//        receiver.cancel(true);
     }
 }

@@ -9,7 +9,10 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 
 /**
  * Receive commands and image data using a TCP connection
@@ -43,35 +46,41 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
     @Override
     protected Void doInBackground(Void... params) {
         while (!isCancelled()) {
+            SocketChannel channel = null;
             try {
                 InetAddress serverAddr = InetAddress.getByName(mServerIp);
-                Socket socket = connectToServer(serverAddr);
+                channel = connectToServer(serverAddr);
+                // connectToServer can return an unconnected server
+                // if the thread is interrupted. Check for this here:
+                if (isCancelled()) {
+                    break;
+                }
                 mNetworkListener.onConnected();
-                try {
-                    DataInputStream is = new DataInputStream(socket.getInputStream());
-                    while (!isCancelled()) {
-                        ImageCommand command = receiveCommand(is);
-                        if (command == null) {
-                            break; // socket closed
-                        } else if (command == ImageCommand.TAKEN) {
-                            mImageListener.onImageTaken();
-                        } else if (command == ImageCommand.DATA) {
-                            byte[] imageBuf = receiveImage(is);
-                            if (imageBuf == null) {
-                                break;
-                            }
-                            mImageListener.onImageReceived(imageBuf);
-                        } else {
-                            Log.e(CLASS_NAME, "Received invalid command.");
+                while (!isCancelled()) {
+                    ImageCommand command = receiveCommand(channel);
+                    if (command == null) {
+                        break; // socket closed or command could not be read
+                    } else if (command == ImageCommand.TAKEN) {
+                        mImageListener.onImageTaken();
+                    } else if (command == ImageCommand.DATA) {
+                        byte[] imageBuf = receiveImage(channel);
+                        if (imageBuf == null) {
+                            break;
                         }
+                        mImageListener.onImageReceived(imageBuf);
+                    } else {
+                        Log.e(CLASS_NAME, "Received invalid command.");
                     }
-                } catch (Exception e) {
-                    Log.e(CLASS_NAME, "Receiver eError ", e);
-                } finally {
-                    socket.close();
                 }
             } catch (Exception e) {
                 Log.e(CLASS_NAME, "Connection error", e);
+            } finally {
+                if (channel != null) {
+                    try {
+                        channel.close();
+                    } catch (IOException e) {
+                    }
+                }
             }
             mNetworkListener.onDisconnected();
         }
@@ -80,39 +89,45 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
     }
 
     @NonNull
-    private Socket connectToServer(InetAddress serverAddr) throws IOException, InterruptedException {
+    private SocketChannel connectToServer(InetAddress serverAddr) throws IOException, InterruptedException {
         Log.d(CLASS_NAME, String.format("Connecting to %s", serverAddr.toString()));
-        Socket socket = null;
-        while (socket == null) {
+
+        System.out.println(String.format("Connecting to %s", serverAddr.toString()));
+        SocketChannel socketChannel = SocketChannel.open();
+        socketChannel.configureBlocking(true);
+        // This will block until a connection has been established or an IOException occurred.
+        boolean connected = false;
+        while (!connected && !isCancelled()) {
             try {
-                //create a socket to make the connection with the server
-                socket = new Socket(serverAddr, mServerPort);
+                socketChannel.connect(new InetSocketAddress(serverAddr, mServerPort));
+                connected = true;
             } catch (ConnectException e) {
-                Log.e(CLASS_NAME, String.format("Connection to server %s failed. Retrying...",
-                        serverAddr.toString()));
+                Log.e(CLASS_NAME, "Exception while trying to connect to server: " + e.getMessage());
+                Log.e(CLASS_NAME, "Will try again...");
                 Thread.sleep(500);
             }
         }
-        return socket;
+        return socketChannel;
     }
 
-    private byte[] receiveImage(DataInputStream is) throws IOException {
+    private byte[] receiveImage(SocketChannel channel) throws IOException {
         // Obtain the size of the next image in bytes
         Log.d(CLASS_NAME, String.format("Waiting for next image."));
         try {
-
-            byte[] intBuf = new byte[4];
-            // Avoid blocking I/O in order to listen to the isCancelled() flag
-            while (is.available() < 4) {
-                if (isCancelled()) {
-                    return null;
-                }
-                try {
-                    Thread.sleep(1l);
-                } catch (InterruptedException e) {
-                }
+            ByteBuffer imageSizeBuffer = ByteBuffer.allocate(4);
+            int numBytesRead = channel.read(imageSizeBuffer);
+            if (numBytesRead == -1) {
+                Log.e(CLASS_NAME, "Socket was closed while reading the size of the next image." );
+                return null;
+            } else if (numBytesRead < 4) {
+                Log.e(CLASS_NAME, "Could not read the size of the next image completely." );
+                return null;
             }
-            is.readFully(intBuf);
+            // numBytesRead == 4
+            imageSizeBuffer.flip();
+            byte intBuf[] = new byte[4];
+            imageSizeBuffer.get(intBuf);
+
             int imageSize = 0;
             for (int i = 0; i < 4; ++i) {
                 int interpretedByte = (((int) intBuf[intBuf.length - 1 - i]) & 0xff);
@@ -120,18 +135,15 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
                 imageSize += interpretedByte;
             }
 
+            ByteBuffer imageBuffer = ByteBuffer.allocate(imageSize);
             Log.i(CLASS_NAME, String.format("Trying to receive an image buffer of size %d", imageSize));
-            byte[] imageBuf = new byte[imageSize];
-            while (is.available() == 0) {
-                if (isCancelled()) {
-                    return null;
-                }
-                try {
-                    Thread.sleep(1l);
-                } catch (InterruptedException e) {
-                }
+            numBytesRead = 0;
+            while (numBytesRead < imageSize) {
+                numBytesRead += channel.read(imageBuffer);
             }
-            is.readFully(imageBuf);
+            imageBuffer.flip();
+            byte[] imageBuf = new byte[imageSize];
+            imageBuffer.get(imageBuf);
             Log.i(CLASS_NAME, String.format("Received image buffer of size %d", imageBuf.length));
             return imageBuf;
         } catch (EOFException e) {
@@ -140,33 +152,33 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
         }
     }
 
-    private ImageCommand receiveCommand(DataInputStream is) throws IOException {
+    private ImageCommand receiveCommand(SocketChannel channel) throws IOException {
         Log.d(CLASS_NAME, String.format("Waiting for next command."));
-        try {
-            while (is.available() < 1) {
-                if (isCancelled()) {
-                    return null;
-                }
-                try {
-                    Thread.sleep(1l);
-                } catch (InterruptedException e) {
-                }
-            }
-            byte command = is.readByte();
-            switch (command) {
-                case 1:
-                    Log.d(CLASS_NAME, String.format("An image has been taken!"));
-                    return ImageCommand.TAKEN;
-                case 2:
-                    Log.d(CLASS_NAME, String.format("Image data will be transferred!"));
-                    return ImageCommand.DATA;
-                default:
-                    return ImageCommand.INVALID;
-            }
-        } catch (EOFException e) {
-            Log.e(CLASS_NAME, "Server closed the socket." );
+        System.out.println(String.format("Waiting for next command."));
+        ByteBuffer buffer = ByteBuffer.allocate(1);
+        int numBytesRead = channel.read(buffer);
+        if (numBytesRead == -1) {
+            Log.e(CLASS_NAME, "Socket was closed while reading next command.");
+            return null;
+        } else if (numBytesRead == 0) {
+            Log.e(CLASS_NAME, "Could not read next command.");
             return null;
         }
+        // numBytesRead == 1
 
+        buffer.flip();
+        byte command = buffer.get();
+        switch (command) {
+            case 1:
+                Log.d(CLASS_NAME, String.format("An image has been taken!"));
+                System.out.println(String.format("An image has been taken!."));
+                return ImageCommand.TAKEN;
+            case 2:
+                Log.d(CLASS_NAME, String.format("Image data will be transferred!"));
+                System.out.println(String.format("Image data will be transferred!"));
+                return ImageCommand.DATA;
+            default:
+                return ImageCommand.INVALID;
+        }
     }
 }
