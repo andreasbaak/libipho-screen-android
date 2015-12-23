@@ -40,4 +40,13 @@
         android:adjustViewBounds="true"
         android:src="@drawable/please_wait" />
 
+    <ImageView
+        android:id="@+id/network_connection_status"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:layout_gravity="center"
+        android:scaleType="fitCenter"
+        android:adjustViewBounds="true"
+        android:src="@drawable/disconnected" />
+
 </FrameLayout>

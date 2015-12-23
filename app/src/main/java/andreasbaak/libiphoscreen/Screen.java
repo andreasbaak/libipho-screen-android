@@ -11,6 +11,9 @@ import android.os.Handler;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
+import android.view.animation.AccelerateInterpolator;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
 import android.widget.ImageView;
 
 import java.io.ByteArrayInputStream;
@@ -48,6 +51,7 @@ public class Screen extends AppCompatActivity {
     private ImageView mCameraImageMask;
     private ImageReceiver mImageReceiver;
     private ImageView mPleaseWaitView;
+    private ImageView mNetworkConnectionStatusView;
 
     /** Stores the current image on order to be able to restore it when the activity is
      * recreated.
@@ -65,6 +69,7 @@ public class Screen extends AppCompatActivity {
         mCameraImageView = (SizeAwareImageView)findViewById(R.id.camera_image_view);
         mCameraImageMask = (ImageView)findViewById(R.id.camera_image_mask);
         mPleaseWaitView = (ImageView)findViewById(R.id.camera_please_wait);
+        mNetworkConnectionStatusView = (ImageView)findViewById(R.id.network_connection_status);
 
         restoreCurrentImage(savedInstanceState);
         alignSizeOfImageMask();
@@ -129,42 +134,90 @@ public class Screen extends AppCompatActivity {
         savedInstanceState.putParcelable("currentImage", currentImage);
     }
 
+    class ImageHandler implements ImageReceivedListener {
+        @Override
+        public void onImageTaken() {
+            runOnUiThread(new Runnable() {
+
+                @Override
+                public void run() {
+                    mCameraImageView.setAlpha(0.5f);
+                    showWaitScreen();
+                }
+            });
+        }
+
+        @Override
+        public void onImageReceived(byte[] imageBuffer) {
+            final Bitmap bitmap = decodeImageBuffer(imageBuffer);
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    hideWaitScreen();
+                    mCameraImageView.setImageBitmap(bitmap);
+                }
+            });
+            currentImage = bitmap;
+        }
+
+        private Bitmap decodeImageBuffer(byte[] imageBuffer) {
+            final ByteArrayInputStream inputStream = new ByteArrayInputStream(imageBuffer);
+            return BitmapFactory.decodeStream(inputStream);
+        }
+    }
+
+    class ConnectionHandler implements NetworkConnectionStatusListener {
+        private void fadeOut(final View view)
+        {
+            Animation fadeOut = new AlphaAnimation(1, 0);
+            fadeOut.setInterpolator(new AccelerateInterpolator());
+            fadeOut.setDuration(2000);
+
+            fadeOut.setAnimationListener(new Animation.AnimationListener()
+            {
+                public void onAnimationEnd(Animation animation)
+                {
+                    view.setVisibility(View.GONE);
+                }
+                public void onAnimationRepeat(Animation animation) {}
+                public void onAnimationStart(Animation animation) {}
+            });
+
+            view.startAnimation(fadeOut);
+        }
+
+        @Override
+        public void onConnected() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mNetworkConnectionStatusView.setImageResource(R.drawable.connected);
+                    fadeOut(mNetworkConnectionStatusView);
+                }
+            });
+
+        }
+
+        @Override
+        public void onDisconnected() {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    mNetworkConnectionStatusView.setImageResource(R.drawable.disconnected);
+                    mNetworkConnectionStatusView.setVisibility(View.VISIBLE);
+                }
+            });
+        }
+    }
+
     @Override
     public void onStart() {
         super.onStart();
         hide();
 
-        mImageReceiver = new ImageReceiver(SERVER_IP, SERVER_PORT, new ImageReceivedListener() {
-            @Override
-            public void onImageTaken() {
-                runOnUiThread(new Runnable() {
-
-                    @Override
-                    public void run() {
-                        mCameraImageView.setAlpha(0.5f);
-                        showWaitScreen();
-                    }
-                });
-            }
-
-            @Override
-            public void onImageReceived(byte[] imageBuffer) {
-                final Bitmap bitmap = decodeImageBuffer(imageBuffer);
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        hideWaitScreen();
-                        mCameraImageView.setImageBitmap(bitmap);
-                    }
-                });
-                currentImage = bitmap;
-            }
-
-            private Bitmap decodeImageBuffer(byte[] imageBuffer) {
-                final ByteArrayInputStream inputStream = new ByteArrayInputStream(imageBuffer);
-                return BitmapFactory.decodeStream(inputStream);
-            }
-        });
+        mImageReceiver = new ImageReceiver(SERVER_IP, SERVER_PORT,
+                new ImageHandler(),
+                new ConnectionHandler());
         mImageReceiver.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
         hideWaitScreen();
     }

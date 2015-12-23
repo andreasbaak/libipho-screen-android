@@ -10,7 +10,6 @@ import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.Socket;
-import java.net.UnknownHostException;
 
 /**
  * Receive commands and image data using a TCP connection
@@ -25,14 +24,20 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
         DATA
     }
 
-    private final ImageReceivedListener mListener;
+    private final ImageReceivedListener mImageListener;
+    private final NetworkConnectionStatusListener mNetworkListener;
     private final String mServerIp;
     private final int mServerPort;
 
-    public ImageReceiver(String serverIp, int serverPort, ImageReceivedListener listener) {
+    public ImageReceiver(String serverIp, int serverPort,
+                         ImageReceivedListener imageListener,
+                         NetworkConnectionStatusListener networkListener) {
         mServerIp = serverIp;
         mServerPort = serverPort;
-        mListener = listener;
+        mImageListener = imageListener;
+        mNetworkListener = networkListener;
+
+        mNetworkListener.onDisconnected();
     }
 
     @Override
@@ -41,6 +46,7 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
             try {
                 InetAddress serverAddr = InetAddress.getByName(mServerIp);
                 Socket socket = connectToServer(serverAddr);
+                mNetworkListener.onConnected();
                 try {
                     DataInputStream is = new DataInputStream(socket.getInputStream());
                     while (!isCancelled()) {
@@ -48,13 +54,13 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
                         if (command == null) {
                             break; // socket closed
                         } else if (command == ImageCommand.TAKEN) {
-                            mListener.onImageTaken();
+                            mImageListener.onImageTaken();
                         } else if (command == ImageCommand.DATA) {
                             byte[] imageBuf = receiveImage(is);
                             if (imageBuf == null) {
                                 break;
                             }
-                            mListener.onImageReceived(imageBuf);
+                            mImageListener.onImageReceived(imageBuf);
                         } else {
                             Log.e(CLASS_NAME, "Received invalid command.");
                         }
@@ -67,6 +73,7 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
             } catch (Exception e) {
                 Log.e(CLASS_NAME, "Connection error", e);
             }
+            mNetworkListener.onDisconnected();
         }
         Log.i(CLASS_NAME, "Finished operation on receiver " + this);
         return null;
