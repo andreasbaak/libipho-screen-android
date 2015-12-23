@@ -59,13 +59,13 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
                 while (!isCancelled()) {
                     ImageCommand command = receiveCommand(channel);
                     if (command == null) {
-                        break; // socket closed or command could not be read
+                        throw new Exception("Socket was closed on receiving a command.");
                     } else if (command == ImageCommand.TAKEN) {
                         mImageListener.onImageTaken();
                     } else if (command == ImageCommand.DATA) {
                         byte[] imageBuf = receiveImage(channel);
                         if (imageBuf == null) {
-                            break;
+                            throw new Exception("Socket was closed on receiving an image.");
                         }
                         mImageListener.onImageReceived(imageBuf);
                     } else {
