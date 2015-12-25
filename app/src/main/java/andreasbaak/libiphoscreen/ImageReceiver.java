@@ -24,7 +24,8 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
     enum ImageCommand {
         INVALID,
         TAKEN,
-        DATA
+        DATA,
+        KEEPALIVE_PROBE
     }
 
     private final ImageReceivedListener mImageListener;
@@ -68,6 +69,8 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
                             throw new Exception("Socket was closed on receiving an image.");
                         }
                         mImageListener.onImageReceived(imageBuf);
+                    } else if (command == ImageCommand.KEEPALIVE_PROBE) {
+                        // ignore
                     } else {
                         Log.e(CLASS_NAME, "Received invalid command.");
                     }
@@ -174,6 +177,13 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
             case 2:
                 Log.d(CLASS_NAME, String.format("Image data will be transferred!"));
                 return ImageCommand.DATA;
+            case 3:
+                Log.d(CLASS_NAME, String.format("Keepalive probe received. Ignoring command."));
+                ByteBuffer keepaliveReturn = ByteBuffer.allocate(1);
+                keepaliveReturn.put((byte)3);
+                keepaliveReturn.flip();
+                channel.write(keepaliveReturn);
+                return ImageCommand.KEEPALIVE_PROBE;
             default:
                 return ImageCommand.INVALID;
         }
