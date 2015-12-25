@@ -154,7 +154,6 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
 
     private ImageCommand receiveCommand(SocketChannel channel) throws IOException {
         Log.d(CLASS_NAME, String.format("Waiting for next command."));
-        System.out.println(String.format("Waiting for next command."));
         ByteBuffer buffer = ByteBuffer.allocate(1);
         int numBytesRead = channel.read(buffer);
         if (numBytesRead == -1) {
@@ -171,11 +170,9 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
         switch (command) {
             case 1:
                 Log.d(CLASS_NAME, String.format("An image has been taken!"));
-                System.out.println(String.format("An image has been taken!."));
                 return ImageCommand.TAKEN;
             case 2:
                 Log.d(CLASS_NAME, String.format("Image data will be transferred!"));
-                System.out.println(String.format("Image data will be transferred!"));
                 return ImageCommand.DATA;
             default:
                 return ImageCommand.INVALID;
