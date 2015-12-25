@@ -50,6 +50,7 @@ public class Screen extends AppCompatActivity {
     private SizeAwareImageView mCameraImageView;
     private ImageView mCameraImageMask;
     private ImageReceiver mImageReceiver;
+    private HeartbeatReceiver mHeartbeatReceiver;
     private ImageView mPleaseWaitView;
     private ImageView mNetworkConnectionStatusView;
 
@@ -60,6 +61,7 @@ public class Screen extends AppCompatActivity {
 
     private static final String SERVER_IP = "photobooth";
     private static final int SERVER_PORT = 1338;
+    private static final int HEARTBEAT_PORT = 1339;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -215,6 +217,9 @@ public class Screen extends AppCompatActivity {
         super.onStart();
         hide();
 
+        mHeartbeatReceiver = new HeartbeatReceiver(SERVER_IP, HEARTBEAT_PORT);
+        mHeartbeatReceiver.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR);
+
         mImageReceiver = new ImageReceiver(SERVER_IP, SERVER_PORT,
                 new ImageHandler(),
                 new ConnectionHandler());
@@ -225,6 +230,7 @@ public class Screen extends AppCompatActivity {
     @Override
     public void onStop() {
         super.onStop();
+        mHeartbeatReceiver.cancel(true);
         mImageReceiver.cancel(true);
     }
 }

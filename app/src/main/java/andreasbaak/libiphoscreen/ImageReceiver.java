@@ -4,13 +4,11 @@ import android.os.AsyncTask;
 import android.support.annotation.NonNull;
 import android.util.Log;
 
-import java.io.DataInputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 
@@ -24,8 +22,7 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
     enum ImageCommand {
         INVALID,
         TAKEN,
-        DATA,
-        KEEPALIVE_PROBE
+        DATA
     }
 
     private final ImageReceivedListener mImageListener;
@@ -69,8 +66,6 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
                             throw new Exception("Socket was closed on receiving an image.");
                         }
                         mImageListener.onImageReceived(imageBuf);
-                    } else if (command == ImageCommand.KEEPALIVE_PROBE) {
-                        // ignore
                     } else {
                         Log.e(CLASS_NAME, "Received invalid command.");
                     }
@@ -92,24 +87,31 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
     }
 
     @NonNull
-    private SocketChannel connectToServer(InetAddress serverAddr) throws IOException, InterruptedException {
+    private SocketChannel connectToServer(InetAddress serverAddr) throws InterruptedException {
         Log.d(CLASS_NAME, String.format("Connecting to %s", serverAddr.toString()));
+        SocketChannel socketChannel = null;
 
-        System.out.println(String.format("Connecting to %s", serverAddr.toString()));
-        SocketChannel socketChannel = SocketChannel.open();
-        socketChannel.configureBlocking(true);
         // This will block until a connection has been established or an IOException occurred.
         boolean connected = false;
         while (!connected && !isCancelled()) {
             try {
+                socketChannel = SocketChannel.open();
+                socketChannel.configureBlocking(true);
                 socketChannel.connect(new InetSocketAddress(serverAddr, mServerPort));
                 connected = true;
-            } catch (ConnectException e) {
-                Log.e(CLASS_NAME, "Exception while trying to connect to server: " + e.getMessage());
-                Log.e(CLASS_NAME, "Will try again...");
+            } catch (Exception e) {
+                Log.e(CLASS_NAME, "Exception while trying to connect to server: " + e.getClass());
                 Thread.sleep(500);
+                if (socketChannel != null) {
+                    try {
+                        socketChannel.close();
+                    } catch (IOException e1) {
+                        e1.printStackTrace();
+                    }
+                }
             }
         }
+
         return socketChannel;
     }
 
@@ -142,7 +144,12 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
             Log.i(CLASS_NAME, String.format("Trying to receive an image buffer of size %d", imageSize));
             numBytesRead = 0;
             while (numBytesRead < imageSize) {
-                numBytesRead += channel.read(imageBuffer);
+                int nbytes = channel.read(imageBuffer);
+                if (nbytes == -1) {
+                    Log.e(CLASS_NAME, "Received EOF while reading image data.");
+                    return null;
+                }
+                numBytesRead += nbytes;
             }
             imageBuffer.flip();
             byte[] imageBuf = new byte[imageSize];
@@ -177,13 +184,6 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
             case 2:
                 Log.d(CLASS_NAME, String.format("Image data will be transferred!"));
                 return ImageCommand.DATA;
-            case 3:
-                Log.d(CLASS_NAME, String.format("Keepalive probe received. Ignoring command."));
-                ByteBuffer keepaliveReturn = ByteBuffer.allocate(1);
-                keepaliveReturn.put((byte)3);
-                keepaliveReturn.flip();
-                channel.write(keepaliveReturn);
-                return ImageCommand.KEEPALIVE_PROBE;
             default:
                 return ImageCommand.INVALID;
         }
