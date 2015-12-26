@@ -1,3 +1,24 @@
+/*
+libipho-screen-android is the Android front-end of the libipho photobooth.
+
+Copyright (C) 2015 Andreas Baak (andreas.baak@gmail.com)
+
+This file is part of libipho-screen-android.
+
+libipho-screen-server is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 2 of the License, or
+(at your option) any later version.
+
+libipho-screen-server is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with libipho-screen-android. If not, see <http://www.gnu.org/licenses/>.
+*/
+
 package andreasbaak.libiphoscreen;
 
 import android.annotation.SuppressLint;
@@ -19,10 +40,15 @@ import android.widget.ImageView;
 import java.io.ByteArrayInputStream;
 
 /**
- * An example full-screen activity that shows and hides the system UI (i.e.
- * status bar and navigation/system bar) with user interaction.
+ * This activity shows the most recently taken image of the
+ * libipho (Linux-based individual photobooth).
+ * It immediately goes full-screen and does not have a non-full-screen mode.
+ * If the app is not connected to the libipho server, it shows a corresponding
+ * symbol on the center of the screen.
  */
 public class Screen extends AppCompatActivity {
+    private static final String CLASS_NAME = "Screen";
+
     /**
      * Some older devices needs a small delay between UI widget updates
      * and a change of the status and navigation bar.
@@ -99,14 +125,10 @@ public class Screen extends AppCompatActivity {
     }
 
     private void restoreCurrentImage(Bundle savedInstanceState) {
-        Log.i("X", "Restoring image" );
-
         if (savedInstanceState != null) {
-            Log.i("X", "SavedState" );
-
             Parcelable img = savedInstanceState.getParcelable("currentImage");
             if (img != null) {
-                Log.i("X", "Image" );
+                Log.d(CLASS_NAME, "Restoring image from the previous life cycle.");
                 mCameraImageView.setImageBitmap((Bitmap)img);
             }
         }
@@ -129,13 +151,18 @@ public class Screen extends AppCompatActivity {
 
     @Override
     public void onSaveInstanceState(Bundle savedInstanceState) {
-        // Store the currently shown image in order to restore the last view.
-        Log.i("X", "Saving current image: " + currentImage);
-
         super.onSaveInstanceState(savedInstanceState);
+
+        // Store the currently shown image in order to restore the last view.
+        Log.d(CLASS_NAME, "Saving current image: " + currentImage);
         savedInstanceState.putParcelable("currentImage", currentImage);
     }
 
+    /**
+     * Display the "please wait" screen as soon as an image has been taken.
+     * Display the image and remove the "please wait" screen as soon as the image
+     * data has arrived.
+     */
     class ImageHandler implements ImageReceivedListener {
         @Override
         public void onImageTaken() {
@@ -168,6 +195,12 @@ public class Screen extends AppCompatActivity {
         }
     }
 
+    /**
+     * Display the connection status.
+     * If we are not yet connected, show a bold symbol on the center of the screen.
+     * As soon as we are connected, remove the symbol so that the screen can be used
+     * for the image in full screen.
+     */
     class ConnectionHandler implements NetworkConnectionStatusListener {
         private void fadeOut(final View view)
         {

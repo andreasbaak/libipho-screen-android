@@ -1,3 +1,24 @@
+/*
+libipho-screen-android is the Android front-end of the libipho photobooth.
+
+Copyright (C) 2015 Andreas Baak (andreas.baak@gmail.com)
+
+This file is part of libipho-screen-android.
+
+libipho-screen-server is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 2 of the License, or
+(at your option) any later version.
+
+libipho-screen-server is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with libipho-screen-android. If not, see <http://www.gnu.org/licenses/>.
+*/
+
 package andreasbaak.libiphoscreen;
 
 import android.os.AsyncTask;
@@ -14,6 +35,10 @@ import java.nio.channels.SocketChannel;
 /**
  * Receive commands and image data using a TCP connection
  * and forward the received commands using the ImageReceivedListener interface.
+ * As soon as the connection to the server has been established,
+ * a listener is notified about the successful network setup using the
+ * NetworkConnectionStatusListener interface. Similarly, the listener is notified
+ * as soon as the connection is aborted.
  */
 public class ImageReceiver extends AsyncTask<Void, Void, Void> {
     public static final String CLASS_NAME = "ImageReceiver";
@@ -29,6 +54,20 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
     private final String mServerIp;
     private final int mServerPort;
 
+    /**
+     * Create a new ImageReceiver. After creating the instance,
+     * the receiver can be started with the execute() functions of the
+     * AsyncTask class.
+     *
+     * @param serverIp
+     * IP address of the server that we connect to.
+     * @param serverPort
+     * TCP port of the server.
+     * @param imageListener
+     * Class that is notified about received image data.
+     * @param networkListener
+     * Class that is notified about an established/broken network connection.
+     */
     public ImageReceiver(String serverIp, int serverPort,
                          ImageReceivedListener imageListener,
                          NetworkConnectionStatusListener networkListener) {
@@ -81,7 +120,7 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
             }
             mNetworkListener.onDisconnected();
         }
-        Log.i(CLASS_NAME, "Finished operation on receiver " + this);
+        Log.d(CLASS_NAME, "Finished operation on receiver " + this);
         return null;
     }
 
@@ -116,7 +155,7 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
 
     private byte[] receiveImage(SocketChannel channel) throws IOException {
         // Obtain the size of the next image in bytes
-        Log.d(CLASS_NAME, String.format("Waiting for next image."));
+        Log.d(CLASS_NAME, "Waiting for next image.");
         try {
             ByteBuffer imageSizeBuffer = ByteBuffer.allocate(4);
             int numBytesRead = channel.read(imageSizeBuffer);
@@ -127,7 +166,7 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
                 Log.e(CLASS_NAME, "Could not read the size of the next image completely." );
                 return null;
             }
-            // numBytesRead == 4
+            // numBytesRead == 4 at this stage.
             imageSizeBuffer.flip();
             byte intBuf[] = new byte[4];
             imageSizeBuffer.get(intBuf);
@@ -140,7 +179,7 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
             }
 
             ByteBuffer imageBuffer = ByteBuffer.allocate(imageSize);
-            Log.i(CLASS_NAME, String.format("Trying to receive an image buffer of size %d", imageSize));
+            Log.d(CLASS_NAME, String.format("Trying to receive an image buffer of size %d", imageSize));
             numBytesRead = 0;
             while (numBytesRead < imageSize) {
                 int nbytes = channel.read(imageBuffer);
@@ -153,7 +192,7 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
             imageBuffer.flip();
             byte[] imageBuf = new byte[imageSize];
             imageBuffer.get(imageBuf);
-            Log.i(CLASS_NAME, String.format("Received image buffer of size %d", imageBuf.length));
+            Log.d(CLASS_NAME, String.format("Received image buffer of size %d", imageBuf.length));
             return imageBuf;
         } catch (EOFException e) {
             Log.e(CLASS_NAME, "Server closed the socket." );
@@ -162,7 +201,7 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
     }
 
     private ImageCommand receiveCommand(SocketChannel channel) throws IOException {
-        Log.d(CLASS_NAME, String.format("Waiting for next command."));
+        Log.d(CLASS_NAME, "Waiting for next command.");
         ByteBuffer buffer = ByteBuffer.allocate(1);
         int numBytesRead = channel.read(buffer);
         if (numBytesRead == -1) {
@@ -172,16 +211,16 @@ public class ImageReceiver extends AsyncTask<Void, Void, Void> {
             Log.e(CLASS_NAME, "Could not read next command.");
             return null;
         }
-        // numBytesRead == 1
+        // numBytesRead == 1 at this stage.
 
         buffer.flip();
         byte command = buffer.get();
         switch (command) {
             case 1:
-                Log.d(CLASS_NAME, String.format("An image has been taken!"));
+                Log.d(CLASS_NAME, "An image has been taken!");
                 return ImageCommand.TAKEN;
             case 2:
-                Log.d(CLASS_NAME, String.format("Image data will be transferred!"));
+                Log.d(CLASS_NAME, "Image data will be transferred!");
                 return ImageCommand.DATA;
             default:
                 return ImageCommand.INVALID;

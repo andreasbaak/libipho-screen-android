@@ -1,3 +1,24 @@
+/*
+libipho-screen-android is the Android front-end of the libipho photobooth.
+
+Copyright (C) 2015 Andreas Baak (andreas.baak@gmail.com)
+
+This file is part of libipho-screen-android.
+
+libipho-screen-server is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 2 of the License, or
+(at your option) any later version.
+
+libipho-screen-server is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with libipho-screen-android. If not, see <http://www.gnu.org/licenses/>.
+*/
+
 package andreasbaak.libiphoscreen;
 
 import android.content.Context;
@@ -28,6 +49,11 @@ public class SizeAwareImageView extends ImageView {
         super(context, attrs, defStyleAttr);
     }
 
+    /**
+     * The provided listener is notified as soon as the size of the drawn image
+     * changes.
+     * @param rl Listener.
+     */
     public void setResizeListener(ResizeListener rl) {
         this.rl = rl;
     }
@@ -50,7 +76,6 @@ public class SizeAwareImageView extends ImageView {
         final float scaleX = f[Matrix.MSCALE_X];
         final float scaleY = f[Matrix.MSCALE_Y];
 
-        // Get the drawable (could also get the bitmap behind the drawable and getWidth/getHeight)
         final Drawable d = getDrawable();
         if (d == null) {
             return;
@@ -58,7 +83,6 @@ public class SizeAwareImageView extends ImageView {
         final int originalImageWidth = d.getIntrinsicWidth();
         final int origImageHeight = d.getIntrinsicHeight();
 
-        // Calculate the actual dimensions
         // By using ceil, we actually make sure that the mask
         // is at least as big as the actual image.
         final int actualImageWidth = (int)Math.ceil(originalImageWidth * scaleX);
