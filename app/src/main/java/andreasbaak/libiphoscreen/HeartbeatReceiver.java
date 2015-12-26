@@ -53,9 +53,6 @@ public class HeartbeatReceiver extends AsyncTask<Void, Void, Void> {
                         Thread.sleep(500);
                     }
                 }
-                ByteBuffer keepaliveReturn = ByteBuffer.allocate(1);
-                keepaliveReturn.put((byte)3);
-                keepaliveReturn.flip();
 
                 ByteBuffer rcvBuffer = ByteBuffer.allocate(1);
                 while (!isCancelled()) {
